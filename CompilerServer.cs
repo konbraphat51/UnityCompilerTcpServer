@@ -28,10 +28,7 @@ namespace CompilerServer
             public MessageItem[] messages;
         }
 
-        private CompilerRunner compilerRunner = new CompilerRunner();
-
         // Store the client stream to send response after compilation
-        [NonSerialized]
         private NetworkStream pendingStream = null;
 
         [MenuItem("Window/Compiler TCP Server")]
@@ -46,7 +43,9 @@ namespace CompilerServer
             pendingStream = stream;
 
             // Start compilation (will continue even after domain reload)
-            compilerRunner.Compile();
+            CompilationPipeline.RequestScriptCompilation(
+                RequestScriptCompilationOptions.CleanBuildCache
+            );
 
             // Return null to indicate response will be sent later
             return null;
@@ -54,16 +53,22 @@ namespace CompilerServer
 
         private void Awake()
         {
-            compilerRunner.Awake();
-
-            // Subscribe to compilation finished event
-            compilerRunner.OnCompilationFinished += OnCompilationFinished;
+            // Subscribe to Unity assembly compilation events
+            CompilationPipeline.assemblyCompilationFinished += OnAssemblyCompilationFinished;
         }
 
         private void OnDestroy()
         {
-            compilerRunner.OnCompilationFinished -= OnCompilationFinished;
-            compilerRunner.Dispose();
+            // Unsubscribe from compilation events
+            CompilationPipeline.assemblyCompilationFinished -= OnAssemblyCompilationFinished;
+        }
+
+        private void OnAssemblyCompilationFinished(
+            string assemblyPath,
+            CompilerMessage[] compilerMessages
+        )
+        {
+            OnCompilationFinished(compilerMessages);
         }
 
         private async void OnCompilationFinished(CompilerMessage[] messages)

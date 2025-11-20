@@ -183,7 +183,7 @@ namespace CompilerServer
                     string request = Encoding.UTF8.GetString(buffer, 0, bytesRead);
                     Debug.Log($"Received: {request}");
 
-                    await RequestRecompilation(stream);
+                    RequestRecompilation(stream);
                 }
             }
             catch (Exception e)
@@ -213,7 +213,7 @@ namespace CompilerServer
         }
 
         // this needs to be async
-        private async Task RequestRecompilation(NetworkStream stream)
+        private void RequestRecompilation(NetworkStream stream)
         {
             // hold the stream to send response after compilation
             pendingStream = stream;

@@ -54,14 +54,16 @@ namespace CompilerServer
 
         private void OnGUI()
         {
-            EditorGUILayout.LabelField("Compiler TCP Server", EditorStyles.boldLabel);
-            EditorGUILayout.Space();
-
-            serverPort = EditorGUILayout.IntField("Port", serverPort);
-            EditorGUILayout.Space();
-
+            // port number input
             if (!isRunning)
             {
+                serverPort = EditorGUILayout.IntField("Port", serverPort);
+            }
+
+            // run/stop button
+            if (!isRunning)
+            {
+                // wait for running
                 if (GUILayout.Button("Start Server"))
                 {
                     StartServer(serverPort);
@@ -69,6 +71,7 @@ namespace CompilerServer
             }
             else
             {
+                // wait for stopping
                 EditorGUILayout.HelpBox(
                     $"Server is running on port {serverPort}",
                     MessageType.Info
@@ -141,7 +144,8 @@ namespace CompilerServer
 
         private async void ListenForClients()
         {
-            // continuously listening
+            // continuously listen
+            // this loop does not be finished by re-compilation
             while (isRunning)
             {
                 try
@@ -149,9 +153,10 @@ namespace CompilerServer
                     TcpClient client = await tcpListener.AcceptTcpClientAsync();
                     _ = HandleClientAsync(client); // avoiding value unused warning
                 }
+                // listening stopped
                 catch (ObjectDisposedException)
                 {
-                    Debug.Log("Listener stopped, exiting accept loop");
+                    Debug.Log("TCP Listener has been stopped.");
                     break;
                 }
                 catch (Exception e)
@@ -172,12 +177,13 @@ namespace CompilerServer
                 byte[] buffer = new byte[BUFFER_SIZE];
                 int bytesRead;
 
+                // re-compile on each request
                 while ((bytesRead = await stream.ReadAsync(buffer, 0, buffer.Length)) != 0)
                 {
                     string request = Encoding.UTF8.GetString(buffer, 0, bytesRead);
                     Debug.Log($"Received: {request}");
 
-                    await ProcessRequestAsync(request, stream);
+                    _ = RequestRecompilation(stream);
                 }
             }
             catch (Exception e)
@@ -206,9 +212,16 @@ namespace CompilerServer
             }
         }
 
-        private async Task ProcessRequestAsync(string request, NetworkStream stream)
+        // this needs to be async
+        private async Task RequestRecompilation(NetworkStream stream)
         {
+            // hold the stream to send response after compilation
             pendingStream = stream;
+
+            // assets will not be updated in background
+            AssetDatabase.Refresh();
+
+            // forceful recompilation
             CompilationPipeline.RequestScriptCompilation(
                 RequestScriptCompilationOptions.CleanBuildCache
             );
@@ -219,19 +232,16 @@ namespace CompilerServer
             CompilerMessage[] compilerMessages
         )
         {
-            OnCompilationFinished(compilerMessages);
+            Debug.Log("Compilation finished, sending results to client...");
+            SendCompilationResult(compilerMessages);
         }
 
-        private async void OnCompilationFinished(CompilerMessage[] messages)
+        private async void SendCompilationResult(CompilerMessage[] messages)
         {
-            if (pendingStream == null)
-            {
-                return;
-            }
-
+            // guard
             if (!pendingStream.CanWrite)
             {
-                Debug.LogWarning("Cannot send compilation result: stream is not writable");
+                Debug.LogError("Cannot send compilation result: stream is not writable");
                 pendingStream = null;
                 return;
             }
@@ -253,11 +263,6 @@ namespace CompilerServer
 
         private string CreateResponse(CompilerMessage[] compilerMessages)
         {
-            if (compilerMessages == null || compilerMessages.Length == 0)
-            {
-                return "{}";
-            }
-
             MessageResponse response = new MessageResponse
             {
                 messages = new MessageItem[compilerMessages.Length],

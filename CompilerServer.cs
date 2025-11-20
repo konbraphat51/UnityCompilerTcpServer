@@ -1,5 +1,7 @@
 #if UNITY_EDITOR
 using System;
+using System.Net.Sockets;
+using System.Text;
 using System.Threading.Tasks;
 using UnityEditor;
 using UnityEditor.Compilation;
@@ -28,27 +30,63 @@ namespace CompilerServer
 
         private CompilerRunner compilerRunner = new CompilerRunner();
 
+        // Store the client stream to send response after compilation
+        [NonSerialized]
+        private NetworkStream pendingStream = null;
+
         [MenuItem("Window/Compiler TCP Server")]
         public static void ShowWindow()
         {
             GetWindow<CompilerServer>("Compiler TCP Server");
         }
 
-        public override async Task<string> ProcessRequest(string request)
+        public override async Task<string> ProcessRequest(string request, NetworkStream stream)
         {
-            CompilerMessage[] messages = await compilerRunner.Compile();
+            // Store the stream for later response
+            pendingStream = stream;
 
-            return CreateResponse(messages);
+            // Start compilation (will continue even after domain reload)
+            compilerRunner.Compile();
+
+            // Return null to indicate response will be sent later
+            return null;
         }
 
         private void Awake()
         {
             compilerRunner.Awake();
+
+            // Subscribe to compilation finished event
+            compilerRunner.OnCompilationFinished += OnCompilationFinished;
         }
 
         private void OnDestroy()
         {
+            compilerRunner.OnCompilationFinished -= OnCompilationFinished;
             compilerRunner.Dispose();
+        }
+
+        private async void OnCompilationFinished(CompilerMessage[] messages)
+        {
+            // Send response to the waiting client
+            if (pendingStream != null && pendingStream.CanWrite)
+            {
+                try
+                {
+                    string response = CreateResponse(messages);
+                    byte[] responseBytes = Encoding.UTF8.GetBytes(response);
+                    await pendingStream.WriteAsync(responseBytes, 0, responseBytes.Length);
+                    Debug.Log($"Sent compilation result: {response}");
+                }
+                catch (Exception e)
+                {
+                    Debug.LogError($"Failed to send compilation result: {e.Message}");
+                }
+                finally
+                {
+                    pendingStream = null;
+                }
+            }
         }
 
         private string CreateResponse(CompilerMessage[] compilerMessages)

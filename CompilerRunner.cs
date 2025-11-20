@@ -1,34 +1,22 @@
 #if UNITY_EDITOR
-using System.Threading.Tasks;
+using System;
 using UnityEditor.Compilation;
 
 namespace CompilerServer
 {
     public class CompilerRunner
     {
-        private bool isRequestedCompiling = false;
-        private CompilerMessage[] lastCompilerMessages;
+        public event Action<CompilerMessage[]> OnCompilationFinished;
 
         /// <summary>
-        /// Request Unity to compile scripts and wait for the result.
+        /// Request Unity to compile scripts.
+        /// Result will be returned via OnCompilationFinished event.
         /// </summary>
-        /// <returns>
-        /// An array of CompilerMessage objects representing the result of the compilation.
-        /// </returns>
-        public async Task<CompilerMessage[]> Compile()
+        public void Compile()
         {
             CompilationPipeline.RequestScriptCompilation(
                 RequestScriptCompilationOptions.CleanBuildCache
             );
-            isRequestedCompiling = true;
-
-            // wait for compilation to finish
-            while (isRequestedCompiling)
-            {
-                await Task.Delay(100);
-            }
-
-            return lastCompilerMessages;
         }
 
         /// <summary>
@@ -53,8 +41,7 @@ namespace CompilerServer
             CompilerMessage[] compilerMessages
         )
         {
-            lastCompilerMessages = compilerMessages;
-            isRequestedCompiling = false;
+            OnCompilationFinished?.Invoke(compilerMessages);
         }
     }
 }

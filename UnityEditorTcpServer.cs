@@ -31,10 +31,14 @@ namespace UnityEditorTcpServer
         /// <param name="request">
         /// The incoming request string to be processed.
         /// </param>
+        /// <param name="stream">
+        /// The network stream to send response later (for async operations).
+        /// </param>
         /// <returns>
-        /// The response string to be sent back to the client.
+        /// The response string to be sent back to the client immediately.
+        /// Return null if response will be sent later via the stream.
         /// </returns>
-        public abstract Task<string> ProcessRequest(string request);
+        public abstract Task<string> ProcessRequest(string request, NetworkStream stream);
 
         protected virtual void OnGUI()
         {
@@ -126,10 +130,16 @@ namespace UnityEditorTcpServer
                     string request = Encoding.UTF8.GetString(buffer, 0, bytesRead);
                     Debug.Log($"Received: {request}");
 
-                    string response = await ProcessRequest(request);
-                    byte[] responseBytes = Encoding.UTF8.GetBytes(response);
-                    await stream.WriteAsync(responseBytes, 0, responseBytes.Length);
-                    Debug.Log($"Sent: {response}");
+                    string response = await ProcessRequest(request, stream);
+
+                    // If response is not null, send it immediately
+                    // (for requests that don't need to wait for compilation)
+                    if (response != null)
+                    {
+                        byte[] responseBytes = Encoding.UTF8.GetBytes(response);
+                        await stream.WriteAsync(responseBytes, 0, responseBytes.Length);
+                        Debug.Log($"Sent: {response}");
+                    }
                 }
             }
             catch (Exception e)

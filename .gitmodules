@@ -1,0 +1,3 @@
+[submodule "TcpServer"]
+	path = TcpServer
+	url = https://github.com/konbraphat51/UnityEditorTcpServer

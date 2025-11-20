@@ -83,14 +83,6 @@ namespace CompilerServer
         private void Awake()
         {
             CompilationPipeline.assemblyCompilationFinished += OnAssemblyCompilationFinished;
-
-            if (isRunning && tcpListener == null)
-            {
-                Debug.LogWarning(
-                    "Server state was running, but listener is null. Restarting listener..."
-                );
-                RestartListener();
-            }
         }
 
         private void OnDestroy()
@@ -101,82 +93,61 @@ namespace CompilerServer
 
         private void StartServer(int port)
         {
-            if (isRunning)
-            {
-                Debug.LogWarning("Server is already running.");
-                return;
-            }
+            serverPort = port;
+            isRunning = true;
 
             try
             {
-                serverPort = port;
                 tcpListener = new TcpListener(IPAddress.Any, port);
                 tcpListener.Start();
-                isRunning = true;
+
                 Debug.Log($"TCP Server started on port {port}");
+
                 ListenForClients();
             }
             catch (Exception e)
             {
-                isRunning = false;
                 Debug.LogError($"Failed to start TCP Server: {e.Message}");
+                StopServer();
             }
         }
 
         private void StopServer()
         {
+            // guard
             if (!isRunning)
             {
                 return;
             }
 
-            try
+            // kill listener
+            if (tcpListener != null)
             {
-                if (tcpListener != null)
-                {
-                    tcpListener.Stop();
-                    tcpListener = null;
-                }
+                tcpListener.Stop();
+                tcpListener = null;
+            }
 
-                if (pendingStream != null)
-                {
-                    pendingStream.Close();
-                    pendingStream = null;
-                }
+            // kill stream
+            if (pendingStream != null)
+            {
+                pendingStream.Close();
+                pendingStream = null;
+            }
 
-                isRunning = false;
-                Debug.Log("TCP Server stopped");
-            }
-            catch (Exception e)
-            {
-                Debug.LogError($"Error stopping TCP Server: {e.Message}");
-            }
-        }
+            Debug.Log("TCP Server stopped");
 
-        private void RestartListener()
-        {
-            try
-            {
-                tcpListener = new TcpListener(IPAddress.Any, serverPort);
-                tcpListener.Start();
-                Debug.Log($"TCP Server listener restarted on port {serverPort}");
-                ListenForClients();
-            }
-            catch (Exception e)
-            {
-                isRunning = false;
-                Debug.LogError($"Failed to restart TCP Server listener: {e.Message}");
-            }
+            isRunning = false;
         }
 
         private async void ListenForClients()
         {
-            while (isRunning && tcpListener != null)
+            // continuously listening
+            while (isRunning)
             {
                 try
                 {
                     TcpClient client = await tcpListener.AcceptTcpClientAsync();
-                    _ = HandleClientAsync(client);
+                    _ = HandleClientAsync(client); // avoiding value unused warning
                 }
                 catch (ObjectDisposedException)
                 {
@@ -206,12 +177,7 @@ namespace CompilerServer
                     string request = Encoding.UTF8.GetString(buffer, 0, bytesRead);
                     Debug.Log($"Received: {request}");
 
-                    string response = await ProcessRequestAsync(request, stream);
-
-                    if (response != null)
-                    {
-                        await SendResponseAsync(stream, response);
-                    }
+                    await ProcessRequestAsync(request, stream);
                 }
             }
             catch (Exception e)
@@ -240,13 +206,12 @@ namespace CompilerServer
             }
         }
 
-        private async Task<string> ProcessRequestAsync(string request, NetworkStream stream)
+        private async Task ProcessRequestAsync(string request, NetworkStream stream)
         {
             pendingStream = stream;
             CompilationPipeline.RequestScriptCompilation(
                 RequestScriptCompilationOptions.CleanBuildCache
             );
-            return null;
         }
 
         private void OnAssemblyCompilationFinished(

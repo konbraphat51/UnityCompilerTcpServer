@@ -17,7 +17,9 @@ namespace CompilerServer
         /// </returns>
         public async Task<CompilerMessage[]> Compile()
         {
-            CompilationPipeline.RequestScriptCompilation();
+            CompilationPipeline.RequestScriptCompilation(
+                RequestScriptCompilationOptions.CleanBuildCache
+            );
             isRequestedCompiling = true;
 
             // wait for compilation to finish

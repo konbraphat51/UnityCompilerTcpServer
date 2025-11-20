@@ -183,7 +183,7 @@ namespace CompilerServer
                     string request = Encoding.UTF8.GetString(buffer, 0, bytesRead);
                     Debug.Log($"Received: {request}");
 
-                    _ = RequestRecompilation(stream);
+                    await RequestRecompilation(stream);
                 }
             }
             catch (Exception e)

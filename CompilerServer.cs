@@ -1,4 +1,4 @@
-// License: Boost Software License 1.0
+﻿// License: Boost Software License 1.0
 // Author: Konbraphat51
 
 #if UNITY_EDITOR
@@ -15,6 +15,9 @@ namespace CompilerServer
 {
     public class CompilerServer : EditorWindow
     {
+        private const int DEFAULT_PORT = 5000;
+        private const int BUFFER_SIZE = 1024;
+
         [Serializable]
         private class MessageItem
         {
@@ -31,11 +34,16 @@ namespace CompilerServer
             public MessageItem[] messages;
         }
 
-        // TCP Server state
-        public bool isRunning { get; private set; }
+        [SerializeField]
+        private bool isRunning = false;
+
+        [SerializeField]
+        private int serverPort = DEFAULT_PORT;
+
+        [NonSerialized]
         private TcpListener tcpListener;
 
-        // Store the client stream to send response after compilation
+        [NonSerialized]
         private NetworkStream pendingStream = null;
 
         [MenuItem("Window/Compiler TCP Server")]
@@ -46,19 +54,25 @@ namespace CompilerServer
 
         private void OnGUI()
         {
-            // input for port number
-            int port = EditorGUILayout.IntField("Port", 5000);
+            EditorGUILayout.LabelField("Compiler TCP Server", EditorStyles.boldLabel);
+            EditorGUILayout.Space();
 
-            // run / stop button
+            serverPort = EditorGUILayout.IntField("Port", serverPort);
+            EditorGUILayout.Space();
+
             if (!isRunning)
             {
                 if (GUILayout.Button("Start Server"))
                 {
-                    StartServer(port);
+                    StartServer(serverPort);
                 }
             }
             else
             {
+                EditorGUILayout.HelpBox(
+                    $"Server is running on port {serverPort}",
+                    MessageType.Info
+                );
                 if (GUILayout.Button("Stop Server"))
                 {
                     StopServer();
@@ -66,14 +80,36 @@ namespace CompilerServer
             }
         }
 
-        /// <summary>
-        /// Starts the TCP server on the specified port.
-        /// </summary>
-        /// <param name="port">port number</param>
+        private void Awake()
+        {
+            CompilationPipeline.assemblyCompilationFinished += OnAssemblyCompilationFinished;
+
+            if (isRunning && tcpListener == null)
+            {
+                Debug.LogWarning(
+                    "Server state was running, but listener is null. Restarting listener..."
+                );
+                RestartListener();
+            }
+        }
+
+        private void OnDestroy()
+        {
+            CompilationPipeline.assemblyCompilationFinished -= OnAssemblyCompilationFinished;
+            StopServer();
+        }
+
         private void StartServer(int port)
         {
+            if (isRunning)
+            {
+                Debug.LogWarning("Server is already running.");
+                return;
+            }
+
             try
             {
+                serverPort = port;
                 tcpListener = new TcpListener(IPAddress.Any, port);
                 tcpListener.Start();
                 isRunning = true;
@@ -82,67 +118,99 @@ namespace CompilerServer
             }
             catch (Exception e)
             {
+                isRunning = false;
                 Debug.LogError($"Failed to start TCP Server: {e.Message}");
             }
         }
 
-        /// <summary>
-        /// Stops the TCP server.
-        /// </summary>
         private void StopServer()
         {
-            if (isRunning)
+            if (!isRunning)
+            {
+                return;
+            }
+
+            try
             {
                 if (tcpListener != null)
                 {
                     tcpListener.Stop();
                     tcpListener = null;
                 }
+
+                if (pendingStream != null)
+                {
+                    pendingStream.Close();
+                    pendingStream = null;
+                }
+
                 isRunning = false;
                 Debug.Log("TCP Server stopped");
+            }
+            catch (Exception e)
+            {
+                Debug.LogError($"Error stopping TCP Server: {e.Message}");
+            }
+        }
+
+        private void RestartListener()
+        {
+            try
+            {
+                tcpListener = new TcpListener(IPAddress.Any, serverPort);
+                tcpListener.Start();
+                Debug.Log($"TCP Server listener restarted on port {serverPort}");
+                ListenForClients();
+            }
+            catch (Exception e)
+            {
+                isRunning = false;
+                Debug.LogError($"Failed to restart TCP Server listener: {e.Message}");
             }
         }
 
         private async void ListenForClients()
         {
-            while (isRunning)
+            while (isRunning && tcpListener != null)
             {
                 try
                 {
                     TcpClient client = await tcpListener.AcceptTcpClientAsync();
-                    HandleClient(client);
+                    _ = HandleClientAsync(client);
                 }
                 catch (ObjectDisposedException)
                 {
-                    // Listener has been stopped, exit the loop
+                    Debug.Log("Listener stopped, exiting accept loop");
                     break;
+                }
+                catch (Exception e)
+                {
+                    Debug.LogError($"Error accepting client: {e.Message}");
                 }
             }
         }
 
-        private async void HandleClient(TcpClient client)
+        private async Task HandleClientAsync(TcpClient client)
         {
-            Debug.Log("Client connected");
-            NetworkStream stream = client.GetStream();
-            byte[] buffer = new byte[1024];
-            int bytesRead;
+            Debug.Log($"Client connected from {client.Client.RemoteEndPoint}");
+            NetworkStream stream = null;
 
             try
             {
+                stream = client.GetStream();
+                byte[] buffer = new byte[BUFFER_SIZE];
+                int bytesRead;
+
                 while ((bytesRead = await stream.ReadAsync(buffer, 0, buffer.Length)) != 0)
                 {
                     string request = Encoding.UTF8.GetString(buffer, 0, bytesRead);
                     Debug.Log($"Received: {request}");
 
-                    string response = await ProcessRequest(request, stream);
+                    string response = await ProcessRequestAsync(request, stream);
 
-                    // If response is not null, send it immediately
-                    // (for requests that don't need to wait for compilation)
                     if (response != null)
                     {
-                        byte[] responseBytes = Encoding.UTF8.GetBytes(response);
-                        await stream.WriteAsync(responseBytes, 0, responseBytes.Length);
-                        Debug.Log($"Sent: {response}");
+                        await SendResponseAsync(stream, response);
                     }
                 }
             }
@@ -152,38 +220,33 @@ namespace CompilerServer
             }
             finally
             {
-                client.Close();
+                stream?.Close();
+                client?.Close();
                 Debug.Log("Client disconnected");
             }
         }
 
-        private async Task<string> ProcessRequest(string request, NetworkStream stream)
+        private async Task SendResponseAsync(NetworkStream stream, string response)
         {
-            // Store the stream for later response
-            pendingStream = stream;
+            try
+            {
+                byte[] responseBytes = Encoding.UTF8.GetBytes(response);
+                await stream.WriteAsync(responseBytes, 0, responseBytes.Length);
+                Debug.Log($"Sent: {response}");
+            }
+            catch (Exception e)
+            {
+                Debug.LogError($"Error sending response: {e.Message}");
+            }
+        }
 
-            // Start compilation (will continue even after domain reload)
+        private async Task<string> ProcessRequestAsync(string request, NetworkStream stream)
+        {
+            pendingStream = stream;
             CompilationPipeline.RequestScriptCompilation(
                 RequestScriptCompilationOptions.CleanBuildCache
             );
-
-            // Return null to indicate response will be sent later
             return null;
-        }
-
-        private void Awake()
-        {
-            // Subscribe to Unity assembly compilation events
-            CompilationPipeline.assemblyCompilationFinished += OnAssemblyCompilationFinished;
-        }
-
-        private void OnDestroy()
-        {
-            // Unsubscribe from compilation events
-            CompilationPipeline.assemblyCompilationFinished -= OnAssemblyCompilationFinished;
-
-            // Stop the server
-            StopServer();
         }
 
         private void OnAssemblyCompilationFinished(
@@ -196,42 +259,49 @@ namespace CompilerServer
 
         private async void OnCompilationFinished(CompilerMessage[] messages)
         {
-            // Send response to the waiting client
-            if (pendingStream != null && pendingStream.CanWrite)
+            if (pendingStream == null)
             {
-                try
-                {
-                    string response = CreateResponse(messages);
-                    byte[] responseBytes = Encoding.UTF8.GetBytes(response);
-                    await pendingStream.WriteAsync(responseBytes, 0, responseBytes.Length);
-                    Debug.Log($"Sent compilation result: {response}");
-                }
-                catch (Exception e)
-                {
-                    Debug.LogError($"Failed to send compilation result: {e.Message}");
-                }
-                finally
-                {
-                    pendingStream = null;
-                }
+                return;
+            }
+
+            if (!pendingStream.CanWrite)
+            {
+                Debug.LogWarning("Cannot send compilation result: stream is not writable");
+                pendingStream = null;
+                return;
+            }
+
+            try
+            {
+                string response = CreateResponse(messages);
+                await SendResponseAsync(pendingStream, response);
+            }
+            catch (Exception e)
+            {
+                Debug.LogError($"Failed to send compilation result: {e.Message}");
+            }
+            finally
+            {
+                pendingStream = null;
             }
         }
 
         private string CreateResponse(CompilerMessage[] compilerMessages)
         {
-            // null guard
-            if ((compilerMessages == null) || (compilerMessages.Length == 0))
+            if (compilerMessages == null || compilerMessages.Length == 0)
             {
                 return "{}";
             }
 
-            MessageResponse response = new MessageResponse();
-            response.messages = new MessageItem[compilerMessages.Length];
+            MessageResponse response = new MessageResponse
+            {
+                messages = new MessageItem[compilerMessages.Length],
+            };
 
             for (int cnt = 0; cnt < compilerMessages.Length; cnt++)
             {
                 CompilerMessage msg = compilerMessages[cnt];
-                response.messages[cnt] = new MessageItem()
+                response.messages[cnt] = new MessageItem
                 {
                     type = msg.type.ToString(),
                     message = msg.message,

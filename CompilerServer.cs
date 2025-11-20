@@ -151,7 +151,7 @@ namespace CompilerServer
                 try
                 {
                     TcpClient client = await tcpListener.AcceptTcpClientAsync();
-                    _ = HandleClientAsync(client); // avoiding value unused warning
+                    await HandleClientAsync(client);
                 }
                 // listening stopped
                 catch (ObjectDisposedException)

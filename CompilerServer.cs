@@ -53,6 +53,12 @@ namespace CompilerServer
 
         private string CreateResponse(CompilerMessage[] compilerMessages)
         {
+            // null guard
+            if ((compilerMessages == null) || (compilerMessages.Length == 0))
+            {
+                return "{}";
+            }
+
             MessageResponse response = new MessageResponse();
             response.messages = new MessageItem[compilerMessages.Length];
 

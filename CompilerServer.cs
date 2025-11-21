@@ -314,6 +314,12 @@ namespace CompilerServer
             }
         }
 
+        private void OnDisable()
+        {
+            // stop server on window close
+            StopServer();
+        }
+
         private void StartServer(int port)
         {
             singletonInstance = this;

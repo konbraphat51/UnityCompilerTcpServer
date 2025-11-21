@@ -308,7 +308,7 @@ namespace CompilerServer
         private void OnEnable()
         {
             // restart server after domain reload
-            if (_isRunning)
+            if (_isRunning && !CompilerServer.isRunning)
             {
                 StartServer(serverPort);
             }

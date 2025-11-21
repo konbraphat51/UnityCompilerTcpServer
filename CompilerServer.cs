@@ -305,6 +305,15 @@ namespace CompilerServer
             }
         }
 
+        private void OnEnable()
+        {
+            // restart server after domain reload
+            if (_isRunning)
+            {
+                StartServer(serverPort);
+            }
+        }
+
         private void StartServer(int port)
         {
             singletonInstance = this;

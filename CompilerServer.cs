@@ -1,4 +1,4 @@
-﻿// License: Boost Software License 1.0
+﻿// License: MIT License
 // Author: Konbraphat51
 
 #if UNITY_EDITOR

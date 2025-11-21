@@ -80,7 +80,7 @@ namespace CompilerServer
             }
         }
 
-        private void Awake()
+        private void OnEnable()
         {
             CompilationPipeline.assemblyCompilationFinished += OnAssemblyCompilationFinished;
         }

@@ -41,7 +41,10 @@ namespace CompilerServer
 
         static CompilerServer()
         {
-            CompilationPipeline.assemblyCompilationFinished += OnAssemblyCompilationFinished;
+            CompilationPipeline.assemblyCompilationFinished += OnCompileError;
+
+            CompilationPipeline.assemblyCompilationNotRequired += OnCompileSuccess;
+            AssemblyReloadEvents.beforeAssemblyReload += OnCompileSuccess;
         }
 
         public static void StartServer(int port)
@@ -166,17 +169,12 @@ namespace CompilerServer
             AssetDatabase.Refresh();
 
             // forceful recompilation
-            CompilationPipeline.RequestScriptCompilation(
-                RequestScriptCompilationOptions.CleanBuildCache
-            );
+            CompilationPipeline.RequestScriptCompilation();
 
             Debug.Log("Recompilation requested");
         }
 
-        private static void OnAssemblyCompilationFinished(
-            string assemblyPath,
-            CompilerMessage[] compilerMessages
-        )
+        private static void OnCompileError(string assemblyPath, CompilerMessage[] compilerMessages)
         {
             if (!CompilerServerWindow.isOpened && CompilerServerWindow.singletonInstance.isRunning)
             {
@@ -185,6 +183,22 @@ namespace CompilerServer
 
             Debug.Log("Compilation finished, sending results to client...");
             SendCompilationResult(compilerMessages);
+        }
+
+        private static void OnCompileSuccess(string assemblyPath)
+        {
+            OnCompileSuccess();
+        }
+
+        private static void OnCompileSuccess()
+        {
+            if (!CompilerServerWindow.isOpened && CompilerServerWindow.singletonInstance.isRunning)
+            {
+                return;
+            }
+
+            Debug.Log("Compilation succeeded, sending success response to client...");
+            SendCompilationResult(new CompilerMessage[0]);
         }
 
         private static async void SendCompilationResult(CompilerMessage[] messages)

@@ -13,6 +13,15 @@ using UnityEngine;
 
 namespace CompilerServer
 {
+    /// <summary>
+    /// TCP server that listens for request and returns compilation results.
+    /// </summary>
+    /// <remarks>
+    /// - request content is not specified.
+    /// - response is in JSON format.
+    ///     - { "messages": [ { "type": "Error|Warning|Info", "message": "...", "file": "...", "line": 0, "column": 0 }, ... ] }
+    /// - If there are no compilation errors, this forcefully stops because of domain reload.
+    /// </remarks>
     [InitializeOnLoad]
     public static class CompilerServer
     {
@@ -39,14 +48,26 @@ namespace CompilerServer
             public MessageItem[] messages;
         }
 
+        // called on Unity Editor focused
         static CompilerServer()
         {
+            // when there is a compilation error (ex. syntax error)
             CompilationPipeline.assemblyCompilationFinished += OnCompileError;
 
+            // when compilation starts because of no error
             CompilationPipeline.assemblyCompilationNotRequired += OnCompileSuccess;
             AssemblyReloadEvents.beforeAssemblyReload += OnCompileSuccess;
         }
 
+        private static bool isUsingServer =>
+            CompilerServerWindow.isOpened && CompilerServerWindow.singletonInstance.isRunning;
+
+        /// <summary>
+        /// Starts the TCP server.
+        /// </summary>
+        /// <param name="port">
+        /// The port number on which the TCP server will listen for incoming connections.
+        /// </param>
         public static void StartServer(int port)
         {
             try
@@ -67,6 +88,9 @@ namespace CompilerServer
             }
         }
 
+        /// <summary>
+        /// Stops the TCP server.
+        /// </summary>
         public static void StopServer()
         {
             // kill listener
@@ -91,7 +115,7 @@ namespace CompilerServer
         private static async void ListenForClients()
         {
             // continuously listen
-            // this loop does not be finished by re-compilation
+            // isRunning will be set to false on StopServer()
             while (isRunning)
             {
                 try
@@ -124,7 +148,7 @@ namespace CompilerServer
                 byte[] buffer = new byte[BUFFER_SIZE];
                 int bytesRead;
 
-                // re-compile on each request
+                // repeat for each request
                 while ((bytesRead = await stream.ReadAsync(buffer, 0, buffer.Length)) != 0)
                 {
                     string request = Encoding.UTF8.GetString(buffer, 0, bytesRead);
@@ -168,7 +192,7 @@ namespace CompilerServer
             // assets will not be updated in background
             AssetDatabase.Refresh();
 
-            // forceful recompilation
+            // recompilation
             CompilationPipeline.RequestScriptCompilation();
 
             Debug.Log("Recompilation requested");
@@ -176,7 +200,8 @@ namespace CompilerServer
 
         private static void OnCompileError(string assemblyPath, CompilerMessage[] compilerMessages)
         {
-            if (!CompilerServerWindow.isOpened && CompilerServerWindow.singletonInstance.isRunning)
+            // skip if not using server
+            if (!isUsingServer || !isRunning)
             {
                 return;
             }
@@ -192,7 +217,8 @@ namespace CompilerServer
 
         private static void OnCompileSuccess()
         {
-            if (!CompilerServerWindow.isOpened && CompilerServerWindow.singletonInstance.isRunning)
+            // skip if not using server
+            if (!isUsingServer || !isRunning)
             {
                 return;
             }

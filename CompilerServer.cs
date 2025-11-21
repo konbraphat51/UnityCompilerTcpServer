@@ -40,10 +40,7 @@ namespace CompilerServer
         [SerializeField]
         private int serverPort = DEFAULT_PORT;
 
-        [NonSerialized]
         private TcpListener tcpListener;
-
-        [NonSerialized]
         private NetworkStream pendingStream = null;
 
         [MenuItem("Window/Compiler TCP Server")]

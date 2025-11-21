@@ -3,7 +3,7 @@
 This is a TCP server runs on Unity Editor. You can request to compile and earn syntax errors in the project like this:
 ```json
 {
-	"messages":　[
+	"messages": [
 		{
 			"type":"Error",
 			"message":"Assets\\Dodgeball\\Scripts\\AgentCubeGroundCheck.cs(14,94): error CS1585: Member modifier 'public' must precede the member type and name",
@@ -13,7 +13,7 @@ This is a TCP server runs on Unity Editor. You can request to compile and earn s
 		}
 	]
 }{
-	"messages":　[
+	"messages": [
 		{
 			"type":"Error",
 			"message":"Assets\\Dodgeball\\Scripts\\AgentCubeGroundCheck.cs(14,94): error CS1585: Member modifier 'public' must precede the member type and name",

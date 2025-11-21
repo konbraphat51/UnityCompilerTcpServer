@@ -82,13 +82,11 @@ namespace CompilerServer
 
         private void OnEnable()
         {
-            CompilationPipeline.codeOptimization = CodeOptimization.Debug;
             CompilationPipeline.assemblyCompilationFinished += OnAssemblyCompilationFinished;
         }
 
         private void OnDestroy()
         {
-            CompilationPipeline.codeOptimization = CodeOptimization.Release;
             CompilationPipeline.assemblyCompilationFinished -= OnAssemblyCompilationFinished;
             StopServer();
         }

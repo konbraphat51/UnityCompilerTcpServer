@@ -12,16 +12,6 @@ This is a TCP server runs on Unity Editor. You can request to compile and earn s
 			"column":94
 		}
 	]
-}{
-	"messages": [
-		{
-			"type":"Error",
-			"message":"Assets\\Dodgeball\\Scripts\\AgentCubeGroundCheck.cs(14,94): error CS1585: Member modifier 'public' must precede the member type and name",
-			"file":"Assets\\Dodgeball\\Scripts\\AgentCubeGroundCheck.cs",
-			"line":14,
-			"column":94
-		}
-	]
 }
 ```
 

@@ -60,7 +60,6 @@ namespace CompilerServer
             CompilationPipeline.assemblyCompilationFinished += OnCompileError;
 
             // when compilation starts because of no error
-            CompilationPipeline.assemblyCompilationNotRequired += OnCompileSuccess;
             AssemblyReloadEvents.beforeAssemblyReload += OnCompileSuccess;
         }
 
@@ -195,7 +194,9 @@ namespace CompilerServer
             AssetDatabase.Refresh();
 
             // recompilation
-            CompilationPipeline.RequestScriptCompilation();
+            CompilationPipeline.RequestScriptCompilation(
+                RequestScriptCompilationOptions.CleanBuildCache
+            );
 
             Debug.Log("Recompilation requested");
         }

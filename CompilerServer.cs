@@ -343,7 +343,6 @@ namespace CompilerServer
         private void OnDestroy()
         {
             // stop server on window close
-            Debug.Log("Destroyed");
             StopServer();
         }
 

@@ -340,9 +340,10 @@ namespace CompilerServer
             }
         }
 
-        private void OnDisable()
+        private void OnDestroy()
         {
             // stop server on window close
+            Debug.Log("Destroyed");
             StopServer();
         }
 

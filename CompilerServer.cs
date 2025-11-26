@@ -140,21 +140,20 @@ namespace CompilerServer
         private static async Task HandleClientAsync(TcpClient client)
         {
             Debug.Log($"Client connected from {client.Client.RemoteEndPoint}");
-            NetworkStream stream = null;
 
             try
             {
-                stream = client.GetStream();
+                pendingStream = client.GetStream();
                 byte[] buffer = new byte[BUFFER_SIZE];
                 int bytesRead;
 
                 // repeat for each request
-                while ((bytesRead = await stream.ReadAsync(buffer, 0, buffer.Length)) != 0)
+                while ((bytesRead = await pendingStream.ReadAsync(buffer, 0, buffer.Length)) != 0)
                 {
                     string request = Encoding.UTF8.GetString(buffer, 0, bytesRead);
                     Debug.Log($"Received: {request}");
 
-                    RequestRecompilation(stream);
+                    RequestRecompilation();
                 }
             }
             catch (Exception e)
@@ -163,18 +162,18 @@ namespace CompilerServer
             }
             finally
             {
-                stream?.Close();
+                pendingStream?.Close();
                 client?.Close();
                 Debug.Log("Client disconnected");
             }
         }
 
-        private static async Task SendResponseAsync(NetworkStream stream, string response)
+        private static async Task SendResponseAsync(string response)
         {
             try
             {
                 byte[] responseBytes = Encoding.UTF8.GetBytes(response);
-                await stream.WriteAsync(responseBytes, 0, responseBytes.Length);
+                await pendingStream.WriteAsync(responseBytes, 0, responseBytes.Length);
                 Debug.Log($"Sent: {response}");
             }
             catch (Exception e)
@@ -184,11 +183,8 @@ namespace CompilerServer
         }
 
         // this needs to be async
-        private static void RequestRecompilation(NetworkStream stream)
+        private static void RequestRecompilation()
         {
-            // hold the stream to send response after compilation
-            pendingStream = stream;
-
             // assets will not be updated in background
             AssetDatabase.Refresh();
 
@@ -240,7 +236,7 @@ namespace CompilerServer
             try
             {
                 string response = CreateResponse(messages);
-                await SendResponseAsync(pendingStream, response);
+                await SendResponseAsync(response);
             }
             catch (Exception e)
             {

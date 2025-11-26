@@ -28,6 +28,11 @@ namespace CompilerServer
         private const int BUFFER_SIZE = 1024;
 
         public static bool isRunning { get; private set; } = false;
+        public static bool isResponsing
+        {
+            get { return CompilerServerWindow.singletonInstance.isResponsing; }
+            set { CompilerServerWindow.singletonInstance.isResponsing = value; }
+        }
 
         private static TcpListener tcpListener;
         private static NetworkStream pendingStream = null;
@@ -153,6 +158,7 @@ namespace CompilerServer
                     string request = Encoding.UTF8.GetString(buffer, 0, bytesRead);
                     Debug.Log($"Received: {request}");
 
+                    isResponsing = true;
                     RequestRecompilation();
                 }
             }
@@ -196,8 +202,8 @@ namespace CompilerServer
 
         private static void OnCompileError(string assemblyPath, CompilerMessage[] compilerMessages)
         {
-            // skip if not using server
-            if (!isUsingServer || !isRunning)
+            // skip if not appropriate time to return
+            if (!isUsingServer || !isRunning || !isResponsing)
             {
                 return;
             }
@@ -213,8 +219,8 @@ namespace CompilerServer
 
         private static void OnCompileSuccess()
         {
-            // skip if not using server
-            if (!isUsingServer || !isRunning)
+            // skip if not appropriate time to return
+            if (!isUsingServer || !isRunning || !isResponsing)
             {
                 return;
             }
@@ -233,6 +239,7 @@ namespace CompilerServer
                 return;
             }
 
+            isResponsing = false;
             try
             {
                 string response = CreateResponse(messages);
@@ -284,6 +291,9 @@ namespace CompilerServer
 
         [SerializeField]
         private int serverPort = DEFAULT_PORT;
+
+        [SerializeField]
+        public bool isResponsing = false;
 
         public static bool isOpened
         {

@@ -4,7 +4,7 @@ import socket
 def main():
     with socket.create_connection(("localhost", 5000)) as sock:
         sock.sendall(b"testing")
-        response = sock.recv(1024)
+        response = sock.recv(	8192)
         print(response.decode("utf-8", errors="replace"))
 
 
